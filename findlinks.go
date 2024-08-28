@@ -20,12 +20,17 @@ type SearchResult struct {
 	} `json:"items"`
 }
 
+// This function connects to Google to find URLs and Titles for potential companies that we will want to pentest
 func findLinks() (*SearchResult, error) {
 	apiKey := os.Getenv("GOOGLE_API_KEY")
 	cx := os.Getenv("CSE")
 
 	// The search query
-	query := "Companies in bloemfontein -list -directory -top -best -companies"
+	// query := "location:bloemfontein \"Software Company\" site:*.co.za -site:downdetector.* -site:crown.co.za -site:ethekwini.co.za -site:spurmtbleague.* -site:yep.co.za -filetype:pdf -filetype:doc -filetype:docx -filetype:ppt -filetype:pptx -filetype:xls -filetype:xlsx -site:facebook.* -site:linkedin.* -site:tiktok.* -site:wikipedia.org -site:twitter.* -site:pinterest.* -list -directory -best -top -jobs|job -careers|career -position|positions -news"
+
+	// query := "location:bloemfontein \"Software Company\" -jobs|job -careers|career -position|positions -news"
+
+	query := "Companies in bloemfontein location:bloemfontein -list -directory -top -best -companies -site:*.gov.* -site:maps.google.com -site:facebook.* -site:tiktok.* -site:twitter.* -site:pinterest.*"
 
 	// Create the request URL
 	searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s", apiKey, cx, url.QueryEscape(query))
@@ -75,8 +80,6 @@ func findLinks() (*SearchResult, error) {
 		}
 
 	}
-
-	// fmt.Println(result.Items)
 
 	return &result, nil
 }
