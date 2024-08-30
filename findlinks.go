@@ -59,10 +59,9 @@ func findLinks() (*SearchResult, error) {
 	}
 	fmt.Println(calculatePages)
 	for page := range calculatePages {
-		if page == 2 {
-			fmt.Println("Reached limit")
-			break
-		}
+
+		page = page*10 + 1
+		fmt.Println(page)
 		fmt.Printf("Page %d\n\n", page+1)
 		searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s&start=%d", apiKey, cx, url.QueryEscape(query), page)
 		resp, err := http.Get(searchURL)

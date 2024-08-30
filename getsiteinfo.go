@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -13,6 +14,7 @@ import (
 
 type SiteInfo struct {
 	Title string `json:"title"`
+	Url   string `json:"url"`
 	IP    string `json:"ip"`
 	Alive string `json:"alive"`
 }
@@ -56,15 +58,22 @@ func GetSiteInfo(url string) {
 	decoder.AutoClose = xml.HTMLAutoClose
 	decoder.Entity = xml.HTMLEntity
 	erro := decoder.Decode(&h)
+	var siteInfo SiteInfo
 	if erro != nil {
-		fmt.Println("No Title")
+		siteInfo.Title = strings.TrimSpace(url)
+
 		// return
 	}
 
-	fmt.Println(strings.TrimSpace(h.Title.Text))
-	// status := resp.StatusCode
-	// fmt.Println(string(body))
-	fmt.Println(resp.Header)
-	fmt.Println(ip)
-	// fmt.Println(status)
+	siteInfo.Title = strings.TrimSpace(h.Title.Text)
+	siteInfo.IP = ip[0].String()
+	if resp.StatusCode == 200 {
+		siteInfo.Alive = "true"
+	} else {
+		siteInfo.Alive = "false"
+	}
+	siteInfo.Url = url
+	siteInfoJson, err := json.Marshal(siteInfo)
+	fmt.Println(string(siteInfoJson))
+
 }
