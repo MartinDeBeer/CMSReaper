@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 )
 
@@ -15,8 +16,7 @@ type SearchResult struct {
 		TotalResults string `json:"totalResults"`
 	} `json:"searchInformation"`
 	Items []struct {
-		Title string `json:"title"`
-		Link  string `json:"link"`
+		Link string `json:"link"`
 	} `json:"items"`
 }
 
@@ -54,7 +54,7 @@ func findLinks() (*SearchResult, error) {
 	calculatePages, err := strconv.Atoi(totalPages)
 	calculatePages = calculatePages / 10
 	if err != nil {
-		fmt.Printf("Fuck")
+		fmt.Println(err)
 		return nil, err
 	}
 	fmt.Println(calculatePages)
@@ -66,6 +66,7 @@ func findLinks() (*SearchResult, error) {
 		fmt.Printf("Page %d\n\n", page+1)
 		searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s&start=%d", apiKey, cx, url.QueryEscape(query), page)
 		resp, err := http.Get(searchURL)
+		pattern := regexp.MustCompile(`http[s]?://[^/]+`)
 		if err != nil {
 			fmt.Println("Error:", err)
 			return nil, err
@@ -76,7 +77,8 @@ func findLinks() (*SearchResult, error) {
 			return nil, err
 		}
 		for _, item := range result.Items {
-			fmt.Printf("Title: %s\nLink: %s\n\n", item.Title, item.Link)
+			url := pattern.FindString(item.Link)
+			GetSiteInfo(url)
 		}
 
 	}
