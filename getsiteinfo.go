@@ -27,11 +27,11 @@ type title struct {
 	Text string `xml:",innerxml"`
 }
 
-func GetSiteInfo(url string) {
+func GetSiteInfo(url string) string {
 	resp, err := http.Get(url)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err.Error()
 	}
 	defer resp.Body.Close()
 
@@ -40,14 +40,14 @@ func GetSiteInfo(url string) {
 	ip, err := net.LookupIP(domain)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err.Error()
 	}
 
 	body, err := io.ReadAll(resp.Body)
 
 	if err != nil {
 		fmt.Println(err)
-		return
+		return err.Error()
 	}
 
 	h := html{}
@@ -60,9 +60,7 @@ func GetSiteInfo(url string) {
 	erro := decoder.Decode(&h)
 	var siteInfo SiteInfo
 	if erro != nil {
-		siteInfo.Title = strings.TrimSpace(url)
-
-		// return
+		siteInfo.Title = strings.TrimSpace(domain)
 	}
 
 	siteInfo.Title = strings.TrimSpace(h.Title.Text)
@@ -74,6 +72,10 @@ func GetSiteInfo(url string) {
 	}
 	siteInfo.Url = url
 	siteInfoJson, err := json.Marshal(siteInfo)
-	fmt.Println(string(siteInfoJson))
+	if err != nil {
+		fmt.Println(err)
+		return err.Error()
+	}
+	return string(siteInfoJson)
 
 }
