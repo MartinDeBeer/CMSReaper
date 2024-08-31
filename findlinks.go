@@ -22,20 +22,17 @@ type SearchResult struct {
 
 // This function connects to Google to find URLs and Titles for potential companies that we will want to pentest
 func findLinks() (*SearchResult, error) {
-	apiKey := os.Getenv("GOOGLE_API_KEY")
-	cx := os.Getenv("CSE")
+	apiKey := os.Getenv("GOOGLE_API_KEY") // Google API key set as environment variable for security
+	cx := os.Getenv("CSE")                // Custom search engine key set as environment variable for security
 
+	var sites []string
 	// The search query
-	// query := "location:bloemfontein \"Software Company\" site:*.co.za -site:downdetector.* -site:crown.co.za -site:ethekwini.co.za -site:spurmtbleague.* -site:yep.co.za -filetype:pdf -filetype:doc -filetype:docx -filetype:ppt -filetype:pptx -filetype:xls -filetype:xlsx -site:facebook.* -site:linkedin.* -site:tiktok.* -site:wikipedia.org -site:twitter.* -site:pinterest.* -list -directory -best -top -jobs|job -careers|career -position|positions -news"
-
-	// query := "location:bloemfontein \"Software Company\" -jobs|job -careers|career -position|positions -news"
-
 	query := "Companies in bloemfontein location:bloemfontein -list -directory -top -best -companies -site:*.gov.* -site:maps.google.com -site:facebook.* -site:tiktok.* -site:twitter.* -site:pinterest.*"
 
 	// Create the request URL
 	searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s", apiKey, cx, url.QueryEscape(query))
 
-	// Make the HTTP request
+	// Make the HTTP request to goole
 	resp, err := http.Get(searchURL)
 	if err != nil {
 		fmt.Println("Error:", err)
@@ -43,8 +40,7 @@ func findLinks() (*SearchResult, error) {
 	}
 	defer resp.Body.Close()
 
-	// Decode the JSON response
-	var result SearchResult
+	var result SearchResult // Decode the JSON response
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		fmt.Println("Error decoding JSON:", err)
 		return nil, err
@@ -57,15 +53,17 @@ func findLinks() (*SearchResult, error) {
 		fmt.Println(err)
 		return nil, err
 	}
-	fmt.Println(calculatePages)
-	for page := range calculatePages {
 
-		page = page*10 + 1
-		fmt.Println(page)
-		fmt.Printf("Page %d\n\n", page+1)
-		searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s&start=%d", apiKey, cx, url.QueryEscape(query), page)
+	for start := range calculatePages {
+		/*
+			We can only get 10 results per page, so we need to figure out how many results there are so we can work out how many pages there are.
+			This makes sure that we start at on and then at the last result on the page + 1
+		*/
+		start = start*10 + 1
+		fmt.Println(start)
+		searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s&start=%d", apiKey, cx, url.QueryEscape(query), start)
 		resp, err := http.Get(searchURL)
-		pattern := regexp.MustCompile(`http[s]?://[^/]+`)
+		pattern := regexp.MustCompile(`http[s]?://[^/]+`) // This ensures that we end up on the main page.
 		if err != nil {
 			fmt.Println("Error:", err)
 			return nil, err
@@ -77,9 +75,10 @@ func findLinks() (*SearchResult, error) {
 		}
 		for _, item := range result.Items {
 			url := pattern.FindString(item.Link)
-			GetSiteInfo(url)
+			sites = append(sites, GetSiteInfo(url))
 		}
-
+		InsertTarget(sites)
+		sites = nil
 	}
 
 	return &result, nil
