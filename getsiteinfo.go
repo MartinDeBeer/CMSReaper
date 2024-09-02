@@ -1,15 +1,8 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"encoding/xml"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"regexp"
-	"strings"
 )
 
 type SiteInfo struct {
@@ -17,6 +10,7 @@ type SiteInfo struct {
 	Url   string `json:"url"`
 	IP    string `json:"ip"`
 	Alive string `json:"alive"`
+	CDN   string `json:"cdn"`
 }
 
 type html struct {
@@ -27,55 +21,37 @@ type title struct {
 	Text string `xml:",innerxml"`
 }
 
-func GetSiteInfo(url string) string {
-	resp, err := http.Get(url)
-	if err != nil {
-		fmt.Println(err)
-		return err.Error()
-	}
-	defer resp.Body.Close()
+func GetSiteInfo(flag string) string {
 
-	domainPattern := regexp.MustCompile(`https?://([^/]+)`)
-	domain := domainPattern.FindStringSubmatch(url)[1]
-	ip, err := net.LookupIP(domain)
-	if err != nil {
-		fmt.Println(err)
-		return err.Error()
+	switch flag {
+	case "google": // Get the data from Google
+		sites, err := findLinks()
+		if err != nil {
+			return err.Error()
+		}
+		for _, site := range sites {
+			fmt.Println(site)
+		}
+		return ""
+	case "local": // Get the data from a local database
+		sites, err := SelectRecords()
+		if err != nil {
+			return err.Error()
+		}
+		// var siteInfo SiteInfo
+		for _, site := range sites {
+			fmt.Println(site)
+			var siteInfo SiteInfo
+			if err := json.Unmarshal([]byte(site), &siteInfo); err != nil {
+				fmt.Println("Error decoding JSON:", err)
+				break
+			}
+			Recon(siteInfo.Url)
+		}
+		return ""
+	default:
+		fmt.Println("Usage: cdnreaper -db [options]")
+		return "Usage: cdnreaper -db [options]"
 	}
-
-	body, err := io.ReadAll(resp.Body)
-
-	if err != nil {
-		fmt.Println(err)
-		return err.Error()
-	}
-
-	h := html{}
-	b := []byte(string(body))
-
-	decoder := xml.NewDecoder(bytes.NewBuffer(b))
-	decoder.Strict = false
-	decoder.AutoClose = xml.HTMLAutoClose
-	decoder.Entity = xml.HTMLEntity
-	erro := decoder.Decode(&h)
-	var siteInfo SiteInfo
-	if erro != nil {
-		siteInfo.Title = strings.TrimSpace(domain)
-	}
-
-	siteInfo.Title = strings.TrimSpace(h.Title.Text)
-	siteInfo.IP = ip[0].String()
-	if resp.StatusCode == 200 {
-		siteInfo.Alive = "true"
-	} else {
-		siteInfo.Alive = "false"
-	}
-	siteInfo.Url = url
-	siteInfoJson, err := json.Marshal(siteInfo)
-	if err != nil {
-		fmt.Println(err)
-		return err.Error()
-	}
-	return string(siteInfoJson)
 
 }
