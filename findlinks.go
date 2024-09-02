@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -19,7 +22,8 @@ type SearchResult struct {
 		TotalResults string `json:"totalResults"`
 	} `json:"searchInformation"`
 	Items []struct {
-		Link string `json:"link"`
+		Link  string `json:"link"`
+		Title string `json:"title"`
 	} `json:"items"`
 }
 
@@ -63,7 +67,7 @@ func readNumberFromFile(filePath string) (int, error) {
 }
 
 // This function connects to Google to find URLs and Titles for potential companies that we will want to pentest
-func findLinks() (*SearchResult, error) {
+func findLinks() ([]string, error) {
 	apiKey := os.Getenv("GOOGLE_API_KEY")          // Google API key set as environment variable for security
 	cx := os.Getenv("CSE")                         // Custom search engine key set as environment variable for security
 	queryFile, err := os.Create("query_count.txt") // Keeps count of the query count because we have limited queries with the Google API
@@ -91,10 +95,7 @@ func findLinks() (*SearchResult, error) {
 	defer resp.Body.Close()
 
 	var result SearchResult // Decode the JSON response
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Panic("Error decoding JSON:", err)
-		return nil, err
-	}
+	DecodeJSON(resp.Body)
 	// Print the search results
 	var totalPages string = result.SearchInformation.TotalResults
 	calculatePages, err := strconv.Atoi(totalPages)
@@ -135,19 +136,80 @@ func findLinks() (*SearchResult, error) {
 			return nil, err
 		}
 		defer resp.Body.Close()
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			fmt.Println("Error decoding JSON:", err)
-			break
-		}
+		DecodeJSON(resp.Body)
 		if resp.Body != nil {
 			for _, item := range result.Items {
 				url := pattern.FindString(item.Link)
-				sites = append(sites, GetSiteInfo(url))
+				sites = append(sites, getExtraInfo(url))
 			}
 		}
-		InsertTarget(sites)
-		sites = nil
+
+	}
+	InsertTarget(sites)
+	return sites, nil
+}
+
+func getExtraInfo(url string) string {
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Println(err)
+		return err.Error()
+	}
+	defer resp.Body.Close()
+
+	domainPattern := regexp.MustCompile(`https?://([^/]+)`)
+	cdnPattern := regexp.MustCompile(`<meta\s+name="generator"\scontent="([^"]+)".*`)
+
+	domain := domainPattern.FindStringSubmatch(url)[1]
+	ip, err := net.LookupIP(domain)
+	if err != nil {
+		fmt.Println(err)
+		return err.Error()
 	}
 
-	return &result, nil
+	body, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		fmt.Println(err)
+		return err.Error()
+	}
+
+	h := html{}
+	b := []byte(string(body))
+
+	decoder := xml.NewDecoder(bytes.NewBuffer(b))
+	decoder.Strict = false
+	decoder.AutoClose = xml.HTMLAutoClose
+	decoder.Entity = xml.HTMLEntity
+	erro := decoder.Decode(&h)
+	var siteInfo SiteInfo
+	if erro != nil {
+		siteInfo.Title = strings.TrimSpace(domain)
+	}
+
+	siteInfo.Title = strings.TrimSpace(h.Title.Text)
+	siteInfo.IP = ip[0].String()
+	if resp.StatusCode == 200 {
+		siteInfo.Alive = "true"
+	} else {
+		siteInfo.Alive = "false"
+	}
+
+	// Check for CMS patterns in the HTML content
+	match := cdnPattern.FindStringSubmatch(string(body))
+
+	if len(match) < 2 {
+		siteInfo.CDN = "false"
+	} else {
+		siteInfo.CDN = "true"
+	}
+
+	siteInfo.Url = url
+	siteInfoJson, err := json.Marshal(siteInfo)
+	if err != nil {
+		fmt.Println(err)
+		return err.Error()
+	}
+
+	return string(siteInfoJson)
 }
