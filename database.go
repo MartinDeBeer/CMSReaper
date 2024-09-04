@@ -52,8 +52,10 @@ func SelectRecords() ([]string, error) {
 		var url string
 		var ip string
 		var alive bool
-		var cdn bool
-		if err := rows.Scan(&pk, &title, &url, &ip, &alive, &cdn); err != nil {
+		var cms string
+		var has_cms bool
+		var cms_version string
+		if err := rows.Scan(&pk, &title, &url, &ip, &alive, &cms, &has_cms, &cms_version); err != nil {
 			panic(err)
 		}
 		// fmt.Printf("ID: %d, Title: %s, URL: %s, IP: %s, Alive: %t, CDN: %t\n", pk, title, url, ip, alive, cdn)
@@ -61,7 +63,9 @@ func SelectRecords() ([]string, error) {
 		siteInfo.Url = url
 		siteInfo.IP = ip
 		siteInfo.Alive = strconv.FormatBool(alive)
-		siteInfo.CDN = strconv.FormatBool(cdn)
+		siteInfo.CMS = cms
+		siteInfo.HasCMS = strconv.FormatBool(has_cms)
+		siteInfo.CMSVersion = cms_version
 		siteInfoJson, err := json.Marshal(siteInfo)
 		if err != nil {
 			fmt.Println(err)
@@ -69,7 +73,6 @@ func SelectRecords() ([]string, error) {
 		}
 		results = append(results, string(siteInfoJson))
 	}
-	fmt.Println(results)
 
 	return results, nil
 }
@@ -96,7 +99,7 @@ func InsertTarget(sites []string) (*sql.DB, error) {
 
 		// First, create the temporary table
 		createTmpTableQuery := `
-			CREATE TEMPORARY TABLE IF NOT EXISTS tmp_data (title TEXT, url TEXT, ip TEXT, alive BOOLEAN, cdn BOOLEAN);
+			CREATE TEMPORARY TABLE IF NOT EXISTS tmp_data (title TEXT, url TEXT, ip TEXT, alive BOOLEAN, cms TEXT, has_cms BOOLEAN, cms_version TEXT);
 		`
 
 		_, err := db.Exec(createTmpTableQuery)
@@ -106,18 +109,18 @@ func InsertTarget(sites []string) (*sql.DB, error) {
 		fmt.Println("Created temporary table")
 		// Next, insert the data into the temporary table
 		insertTmpDataQuery := `
-			INSERT INTO tmp_data (title, url, ip, alive, cdn) VALUES ($1, $2, $3, $4, $5);
+			INSERT INTO tmp_data (title, url, ip, alive, cms, cms_version, has_cms) VALUES ($1, $2, $3, $4, $5, $6, $7);
 		`
 
-		_, err = db.Exec(insertTmpDataQuery, websiteProperty.Title, websiteProperty.Url, websiteProperty.IP, alive, websiteProperty.CDN)
+		_, err = db.Exec(insertTmpDataQuery, websiteProperty.Title, websiteProperty.Url, websiteProperty.IP, alive, websiteProperty.CMS, websiteProperty.CMSVersion, websiteProperty.HasCMS)
 		if err != nil {
 			log.Fatalf("Failed to insert data into temporary table: %v", err)
 		}
 		fmt.Println("Added data to temporary table")
 		// Finally, perform the conditional insert into the targets table
 		insertIntoTargetsQuery := `
-			INSERT INTO targets (title, url, ip, alive)
-			SELECT DISTINCT title, url, ip, alive
+			INSERT INTO targets (title, url, ip, alive, cms, has_cms, cms_version)
+			SELECT DISTINCT title, url, ip, alive, cms, has_cms, cms_version
 			FROM tmp_data
 			WHERE NOT EXISTS (
 				SELECT 1 FROM targets
@@ -125,7 +128,9 @@ func InsertTarget(sites []string) (*sql.DB, error) {
 				AND targets.url = tmp_data.url
 				AND targets.ip = tmp_data.ip
 				AND targets.alive = tmp_data.alive
-				AND targets.cdn = tmp_data.cdn
+				AND targets.cms = tmp_data.cms
+				AND targets.cms_version = tmp_data.cms_version
+				AND targets.has_cms = tmp_data.has_cms
 			);
 		`
 
