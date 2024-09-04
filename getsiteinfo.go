@@ -3,17 +3,21 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"strconv"
 )
 
 type SiteInfo struct {
-	Title string `json:"title"`
-	Url   string `json:"url"`
-	IP    string `json:"ip"`
-	Alive string `json:"alive"`
-	CDN   string `json:"cdn"`
+	Title      string `json:"title"`
+	Url        string `json:"url"`
+	IP         string `json:"ip"`
+	Alive      string `json:"alive"`
+	HasCMS     string `json:"cms_cdn"`
+	CMSVersion string `json:"cms_version"`
+	CMS        string `json:"cms"`
 }
 
-type html struct {
+type HTML struct {
 	Title title `xml:"head>title"`
 }
 
@@ -40,13 +44,16 @@ func GetSiteInfo(flag string) string {
 		}
 		// var siteInfo SiteInfo
 		for _, site := range sites {
-			fmt.Println(site)
 			var siteInfo SiteInfo
 			if err := json.Unmarshal([]byte(site), &siteInfo); err != nil {
 				fmt.Println("Error decoding JSON:", err)
 				break
 			}
-			Recon(siteInfo.Url)
+			hasCMS, err := strconv.ParseBool(siteInfo.HasCMS)
+			if err != nil {
+				log.Panic(err)
+			}
+			Recon(siteInfo.Url, hasCMS, siteInfo.CMS, siteInfo.CMSVersion)
 		}
 		return ""
 	default:

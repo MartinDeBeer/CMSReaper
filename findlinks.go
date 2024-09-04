@@ -38,7 +38,7 @@ func writeNumberToFile(filePath string, number int) error {
 	defer file.Close() // Ensure the file is closed after writing
 
 	// Convert the number to a string and write it to the file
-	_, err = file.WriteString(numberString)
+	_, err = file.Write([]byte(numberString))
 	return err
 }
 
@@ -53,7 +53,6 @@ func readNumberFromFile(filePath string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-
 	// Convert the content to a string and trim whitespace/newlines
 	contentStr := strings.TrimSpace(string(content))
 
@@ -68,21 +67,16 @@ func readNumberFromFile(filePath string) (int, error) {
 
 // This function connects to Google to find URLs and Titles for potential companies that we will want to pentest
 func findLinks() ([]string, error) {
-	apiKey := os.Getenv("GOOGLE_API_KEY")          // Google API key set as environment variable for security
-	cx := os.Getenv("CSE")                         // Custom search engine key set as environment variable for security
-	queryFile, err := os.Create("query_count.txt") // Keeps count of the query count because we have limited queries with the Google API
-	if err != nil {
-		fmt.Println(err)
-	}
+	apiKey := os.Getenv("GOOGLE_API_KEY") // Google API key set as environment variable for security
+	cx := os.Getenv("CSE")                // Custom search engine key set as environment variable for security
 	fileInfo, err := os.Stat("query_count.txt")
-	flag := false
 	if err != nil {
 		fmt.Println(err)
 	}
-	defer queryFile.Close()
 	var sites []string
 	// The search query
 	query := "Companies in bloemfontein location:bloemfontein -list -directory -top -best -companies -site:*.gov.* -site:maps.google.com -site:facebook.* -site:tiktok.* -site:twitter.* -site:pinterest.*"
+	firstRequest := true
 
 	// Create the request URL
 	searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s", apiKey, cx, url.QueryEscape(query))
@@ -95,7 +89,10 @@ func findLinks() ([]string, error) {
 	defer resp.Body.Close()
 
 	var result SearchResult // Decode the JSON response
-	DecodeJSON(resp.Body)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Panic("Error decoding JSON:", err)
+		return nil, err
+	}
 	// Print the search results
 	var totalPages string = result.SearchInformation.TotalResults
 	calculatePages, err := strconv.Atoi(totalPages)
@@ -108,26 +105,29 @@ func findLinks() ([]string, error) {
 		/*
 			We can only get 10 results per page, so we need to figure out how many results there are so we can work out how many pages there are.
 			This makes sure that we start at on and then at the last result on the page + 1
+
 		*/
-		fmt.Println(start)
+		if !firstRequest {
+			fmt.Println(start*10 + 1)
+			start = start*10 + 1
+			fmt.Println(start)
+		}
 		if start%100 == 0 && start >= 100 {
+			fmt.Println("We went over the quota")
 			break
 		}
-		if fileInfo.Size() > 2 && !flag {
+		if fileInfo.Size() > 0 && firstRequest {
 
 			content, err := readNumberFromFile("query_count.txt")
 			if err != nil {
 				fmt.Println(err)
 			}
-
-			start, err = strconv.Atoi(string(content))
-			if err != nil {
-				fmt.Println(err)
-			}
-			flag = true
+			start = content
+			firstRequest = false
 		}
+
 		writeNumberToFile("query_count.txt", start)
-		start = start*10 + 1
+
 		searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s&start=%d", apiKey, cx, url.QueryEscape(query), start)
 		resp, err := http.Get(searchURL)
 		pattern := regexp.MustCompile(`http[s]?://[^/]+`) // This ensures that we end up on the main page.
@@ -136,16 +136,20 @@ func findLinks() ([]string, error) {
 			return nil, err
 		}
 		defer resp.Body.Close()
-		DecodeJSON(resp.Body)
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			fmt.Println("Error decoding JSON:", err)
+			break
+		}
 		if resp.Body != nil {
 			for _, item := range result.Items {
 				url := pattern.FindString(item.Link)
 				sites = append(sites, getExtraInfo(url))
 			}
 		}
+		fmt.Println(sites)
+		InsertTarget(sites)
 
 	}
-	InsertTarget(sites)
 	return sites, nil
 }
 
@@ -158,7 +162,7 @@ func getExtraInfo(url string) string {
 	defer resp.Body.Close()
 
 	domainPattern := regexp.MustCompile(`https?://([^/]+)`)
-	cdnPattern := regexp.MustCompile(`<meta\s+name="generator"\scontent="([^"]+)".*`)
+	cdnPattern := regexp.MustCompile(`<meta\s+name="generator"\scontent="([^"]\w+)\s(\S+)".*`)
 
 	domain := domainPattern.FindStringSubmatch(url)[1]
 	ip, err := net.LookupIP(domain)
@@ -174,7 +178,7 @@ func getExtraInfo(url string) string {
 		return err.Error()
 	}
 
-	h := html{}
+	h := HTML{}
 	b := []byte(string(body))
 
 	decoder := xml.NewDecoder(bytes.NewBuffer(b))
@@ -199,9 +203,12 @@ func getExtraInfo(url string) string {
 	match := cdnPattern.FindStringSubmatch(string(body))
 
 	if len(match) < 2 {
-		siteInfo.CDN = "false"
+		siteInfo.HasCMS = "false"
 	} else {
-		siteInfo.CDN = "true"
+		siteInfo.HasCMS = "true"
+		siteInfo.CMSVersion = match[2]
+		siteInfo.CMS = match[1]
+		fmt.Printf("The CMS is: %s and the version is: %s\n", siteInfo.CMS, siteInfo.CMSVersion)
 	}
 
 	siteInfo.Url = url
