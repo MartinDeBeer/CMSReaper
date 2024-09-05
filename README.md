@@ -1,2 +1,2 @@
-# CDNReaper
-Open source CDN vulnerability finder
+# CMSReaper
+Open source CMS vulnerability finder
