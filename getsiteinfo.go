@@ -25,7 +25,7 @@ type title struct {
 	Text string `xml:",innerxml"`
 }
 
-func GetSiteInfo(flag string) string {
+func GetSiteInfo(flag string, wordlist string, subdomainList string) string {
 
 	switch flag {
 	case "google": // Get the data from Google
@@ -53,12 +53,12 @@ func GetSiteInfo(flag string) string {
 			if err != nil {
 				log.Panic(err)
 			}
-			Recon(siteInfo.Url, hasCMS, siteInfo.CMS, siteInfo.CMSVersion)
+			Recon(wordlist, subdomainList, siteInfo.Url, hasCMS, siteInfo.CMS, siteInfo.CMSVersion)
 		}
 		return ""
 	default:
-		fmt.Println("Usage: cdnreaper -db [options]")
-		return "Usage: cdnreaper -db [options]"
+		fmt.Println("Usage: cmsreaper -db ['google | local'] -dw ['directory wordlist'] -sw ['subdomain wordlist']")
+		return "Usage: cmsreaper -db ['google | local'] -dw ['directory wordlist'] -sw ['subdomain wordlist']"
 	}
 
 }
