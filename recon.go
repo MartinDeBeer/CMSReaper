@@ -2,7 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"regexp"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -11,12 +15,50 @@ type VulnReport struct {
 	URL string `json:"url"`
 }
 
-func Recon(url string, hasCMS bool, CMS string, CMSVersion string) (string, error) {
+func Recon(wordlist string, subdomainList string, url string, hasCMS bool, CMS string, CMSVersion string) (string, error) {
 	fmt.Printf("URL: %s\nhasCMS: %t\nCMS: %s\nCMS Version: %s\n", url, hasCMS, CMS, CMSVersion)
 
 	// Find all the folders using a wordlist
-	CrawlSite(url)
+	fmt.Println("Brute Forcing")
+	errorPattern := regexp.MustCompile(`(?i)Error|Oops|404|Not\sFound|Page\sIsn's\sAvailable`)
+	if wordlist == "" {
+		return "Usage: cdnreaper -db ['google | local'] -dw ['directory wordlist'] -sw ['subdomain wordlist']", nil
+	} else {
+		wordlistFile, err := os.ReadFile(wordlist)
+		if err != nil {
+			return "", err
+		}
+
+		content := strings.Split(string(wordlistFile), "\n")
+		for _, line := range content {
+			if strings.HasPrefix(line, "#") {
+				continue
+			} else {
+				resp, err := http.Get(fmt.Sprintf("%s/%s", url, line))
+				if err != nil {
+					fmt.Println(err)
+					panic(err)
+				}
+				defer resp.Body.Close()
+				bodyBytes, err := io.ReadAll(resp.Body)
+				if err != nil {
+					fmt.Println(err)
+					panic(err)
+				}
+				body := string(bodyBytes)
+				if errorPattern.MatchString(body) {
+					fmt.Printf("%s/%s has an error\n", url, line)
+					continue
+				} else {
+					fmt.Printf("%s/%s\n", url, line)
+
+				}
+			}
+		}
+	}
+
 	// Crawl the website to find hrefs and follow them
+	CrawlSite(url)
 
 	// Brute force subdomains
 
@@ -42,7 +84,7 @@ func CrawlSite(url string) {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%v\n\n", ExtractLinks(doc))
+	ExtractLinks(doc)
 }
 
 func ExtractLinks(doc *html.Node) []string {

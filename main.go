@@ -22,9 +22,11 @@ func main() {
 
 	// Check if flag for Google is ste
 	dbFlag := flag.String("db", "", "-db Use either a database on the local machine or build a db from Google search yes|no")
+	dirList := flag.String("dw", "", "Specify the wordlist to be used for searching for directories")
+	subdomainList := flag.String("sw", "", "Specify the wordlist to be used for searching for directories")
 	// var customDBFlag = flag.String("-dbname", "cdnreaper", "-dbname Name of custom database. Default <cdnreaper>")
 
 	flag.Parse()
-	fmt.Println(GetSiteInfo(*dbFlag))
+	fmt.Println(GetSiteInfo(*dbFlag, *dirList, *subdomainList))
 
 }
