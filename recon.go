@@ -12,15 +12,17 @@ import (
 )
 
 type VulnReport struct {
-	URL string `json:"url"`
+	URL     string   `json:"url"`
+	Folders []string `json:"folders"`
 }
 
 func Recon(wordlist string, subdomainList string, url string, hasCMS bool, CMS string, CMSVersion string) (string, error) {
+	folders := CrawlSite(url)
 	fmt.Printf("URL: %s\nhasCMS: %t\nCMS: %s\nCMS Version: %s\n", url, hasCMS, CMS, CMSVersion)
 
 	// Find all the folders using a wordlist
 	fmt.Println("Brute Forcing")
-	errorPattern := regexp.MustCompile(`(?i)Error|Oops|404|Not\sFound|Page\sIsn's\sAvailable`)
+	errorPattern := regexp.MustCompile(`(?i)Error|Oops|404|Not\sFound|Page\sIsn't\sAvailable`)
 	if wordlist == "" {
 		return "Usage: cdnreaper -db ['google | local'] -dw ['directory wordlist'] -sw ['subdomain wordlist']", nil
 	} else {
@@ -33,33 +35,32 @@ func Recon(wordlist string, subdomainList string, url string, hasCMS bool, CMS s
 		for _, line := range content {
 			if strings.HasPrefix(line, "#") {
 				continue
-			} else {
-				resp, err := http.Get(fmt.Sprintf("%s/%s", url, line))
-				if err != nil {
-					fmt.Println(err)
-					panic(err)
-				}
-				defer resp.Body.Close()
-				bodyBytes, err := io.ReadAll(resp.Body)
-				if err != nil {
-					fmt.Println(err)
-					panic(err)
-				}
-				body := string(bodyBytes)
-				if errorPattern.MatchString(body) {
-					fmt.Printf("%s/%s has an error\n", url, line)
-					continue
-				} else {
-					fmt.Printf("%s/%s\n", url, line)
+			}
+			resp, err := http.Get(fmt.Sprintf("%s/%s", url, line))
+			if err != nil {
+				fmt.Println(err)
+				panic(err)
+			}
+			defer resp.Body.Close()
+			bodyBytes, err := io.ReadAll(resp.Body)
+			if err != nil {
+				fmt.Println(err)
+				panic(err)
+			}
 
-				}
+			body := string(bodyBytes)
+			if errorPattern.MatchString(body) {
+				fmt.Printf("%s/%s\n"+Red, url, line)
+				continue
+			} else {
+				fmt.Printf("%s/%s\n"+Green, url, line)
+				folders = append(folders, fmt.Sprintf("%s/%s\n", url, line))
 			}
 		}
 	}
 
 	// Crawl the website to find hrefs and follow them
-	CrawlSite(url)
-
+	fmt.Printf("%s\n"+Reset, folders)
 	// Brute force subdomains
 
 	// Download CMS and plugins to scan for vulns
@@ -67,7 +68,7 @@ func Recon(wordlist string, subdomainList string, url string, hasCMS bool, CMS s
 	return "", nil
 }
 
-func CrawlSite(url string) {
+func CrawlSite(url string) []string {
 
 	// Create an empty array that will hold all of the links which kinda equate to folders
 	// Open the link
@@ -84,7 +85,7 @@ func CrawlSite(url string) {
 	if err != nil {
 		panic(err)
 	}
-	ExtractLinks(doc)
+	return ExtractLinks(doc)
 }
 
 func ExtractLinks(doc *html.Node) []string {

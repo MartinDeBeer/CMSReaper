@@ -5,7 +5,15 @@ import (
 	"fmt"
 )
 
+const Reset = "\033[0m"
+const Cyan = "\033[36m"
+const Green = "\033[32m"
+const Blue = "\033[34m"
+const Yellow = "\033[33m"
+const Red = "\033[31m"
+
 func main() {
+
 	// findLinks()
 	fmt.Println("\033[2J")
 	fmt.Println(" $$$$$$\\  $$\\      $$\\  $$$$$$\\  $$$$$$$\\                                                    ")

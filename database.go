@@ -124,13 +124,69 @@ func InsertTarget(sites []string) (*sql.DB, error) {
 			FROM tmp_data
 			WHERE NOT EXISTS (
 				SELECT 1 FROM targets
-				WHERE targets.title = tmp_data.title
-				AND targets.url = tmp_data.url
-				AND targets.ip = tmp_data.ip
-				AND targets.alive = tmp_data.alive
-				AND targets.cms = tmp_data.cms
-				AND targets.cms_version = tmp_data.cms_version
-				AND targets.has_cms = tmp_data.has_cms
+				WHERE targets.url = tmp_data.url
+			);
+		`
+
+		_, err = db.Exec(insertIntoTargetsQuery)
+		if err != nil {
+			log.Fatalf("Failed to insert into targets: %v", err)
+		}
+		fmt.Println("Added data to targets from tmp_data")
+	}
+
+	SelectRecords()
+
+	return db, nil
+}
+
+func InsertFolders(sites []string) (*sql.DB, error) {
+	config := LoadConfig()
+	connStr := fmt.Sprintf("user=%s dbname=%s password=%s sslmode=%s", config.user, config.dbname, config.password, config.sslmode)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+	for _, site := range sites {
+		var websiteProperty SiteInfo
+		if err := json.Unmarshal([]byte(site), &websiteProperty); err != nil {
+			fmt.Println(err)
+		}
+		alive, _ := strconv.ParseBool(websiteProperty.Alive)
+		if !alive {
+			continue
+		}
+		// Perform an insert query
+
+		// First, create the temporary table
+		createTmpTableQuery := `
+			CREATE TEMPORARY TABLE IF NOT EXISTS tmp_data (pk SERIAL PRIMARY KEY, target_key INT, url TEXT, folder_name TEXT);
+		`
+
+		_, err := db.Exec(createTmpTableQuery)
+		if err != nil {
+			log.Fatalf("Failed to create temporary table: %v", err)
+		}
+		fmt.Println("Created temporary table")
+		// Next, insert the data into the temporary table
+		insertTmpDataQuery := `
+			INSERT INTO tmp_data (target_key, url, folder_name) VALUES ((SELECT pk FROM targets WHERE url = '$1' LIMIT 1)), $2, $3);
+		`
+
+		_, err = db.Exec(insertTmpDataQuery, websiteProperty.Title, websiteProperty.Url, websiteProperty.IP, alive, websiteProperty.CMS, websiteProperty.CMSVersion, websiteProperty.HasCMS)
+		if err != nil {
+			log.Fatalf("Failed to insert data into temporary table: %v", err)
+		}
+		fmt.Println("Added data to temporary table")
+		// Finally, perform the conditional insert into the targets table
+		insertIntoTargetsQuery := `
+			INSERT INTO folders (target_key, url, folder_name)
+			SELECT DISTINCT target_key, url, folder_name
+			FROM tmp_data
+			WHERE NOT EXISTS (
+				SELECT 1 FROM folders
+				WHERE targets.url = tmp_data.url
 			);
 		`
 
