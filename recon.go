@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -54,14 +55,23 @@ func Recon(wordlist string, subdomainList string, url string, hasCMS bool, CMS s
 				continue
 			} else {
 				fmt.Printf("%s/%s\n"+Green, url, line)
-				folders = append(folders, fmt.Sprintf("%s/%s\n", url, line))
+				folders = append(folders, fmt.Sprintf("%s/%s", url, line))
 			}
 		}
 	}
 
 	// Crawl the website to find hrefs and follow them
+	var vulnReport VulnReport
+
+	vulnReport.URL = url
+	vulnReport.Folders = folders
+
+	foldersJSON, err := json.Marshal(vulnReport)
+	if err != nil {
+		return "", err
+	}
+	InsertFolders(url, foldersJSON)
 	fmt.Printf("%s\n"+Reset, folders)
-	// Brute force subdomains
 
 	// Download CMS and plugins to scan for vulns
 
@@ -102,4 +112,11 @@ func ExtractLinks(doc *html.Node) []string {
 		links = append(links, ExtractLinks(c)...)
 	}
 	return links
+}
+
+// Vulnerability Scanners
+
+func WordPressVulnerabilityScanner(url string) ([]string, error) {
+
+	// return [nil], nil
 }
