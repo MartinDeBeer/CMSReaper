@@ -140,7 +140,7 @@ func InsertTarget(sites []string) (*sql.DB, error) {
 	return db, nil
 }
 
-func InsertFolders(sites []string) (*sql.DB, error) {
+func InsertFolders(url string, sites []byte) (*sql.DB, error) {
 	config := LoadConfig()
 	connStr := fmt.Sprintf("user=%s dbname=%s password=%s sslmode=%s", config.user, config.dbname, config.password, config.sslmode)
 	db, err := sql.Open("postgres", connStr)
@@ -148,33 +148,31 @@ func InsertFolders(sites []string) (*sql.DB, error) {
 		panic(err)
 	}
 	defer db.Close()
-	for _, site := range sites {
-		var websiteProperty SiteInfo
-		if err := json.Unmarshal([]byte(site), &websiteProperty); err != nil {
-			fmt.Println(err)
-		}
-		alive, _ := strconv.ParseBool(websiteProperty.Alive)
-		if !alive {
-			continue
-		}
-		// Perform an insert query
+	var vulnReport VulnReport
+	if err := json.Unmarshal(sites, &vulnReport); err != nil {
+		fmt.Println(err)
+	}
+	// Perform an insert query
+
+	for _, folder := range vulnReport.Folders {
+		fmt.Println(folder)
 
 		// First, create the temporary table
 		createTmpTableQuery := `
 			CREATE TEMPORARY TABLE IF NOT EXISTS tmp_data (pk SERIAL PRIMARY KEY, target_key INT, url TEXT, folder_name TEXT);
 		`
 
-		_, err := db.Exec(createTmpTableQuery)
-		if err != nil {
+		if _, err := db.Exec(createTmpTableQuery); err != nil {
 			log.Fatalf("Failed to create temporary table: %v", err)
 		}
 		fmt.Println("Created temporary table")
+
 		// Next, insert the data into the temporary table
 		insertTmpDataQuery := `
-			INSERT INTO tmp_data (target_key, url, folder_name) VALUES ((SELECT pk FROM targets WHERE url = '$1' LIMIT 1)), $2, $3);
+			INSERT INTO tmp_data (target_key, url, folder_name) VALUES ((SELECT pk FROM targets WHERE url = $1 LIMIT 1), $1, $2);
 		`
 
-		_, err = db.Exec(insertTmpDataQuery, websiteProperty.Title, websiteProperty.Url, websiteProperty.IP, alive, websiteProperty.CMS, websiteProperty.CMSVersion, websiteProperty.HasCMS)
+		_, err = db.Exec(insertTmpDataQuery, vulnReport.URL, folder)
 		if err != nil {
 			log.Fatalf("Failed to insert data into temporary table: %v", err)
 		}
@@ -186,7 +184,8 @@ func InsertFolders(sites []string) (*sql.DB, error) {
 			FROM tmp_data
 			WHERE NOT EXISTS (
 				SELECT 1 FROM folders
-				WHERE targets.url = tmp_data.url
+				WHERE folders.url = tmp_data.url
+				AND folders.folder_name = tmp_data.folder_name
 			);
 		`
 
@@ -195,9 +194,9 @@ func InsertFolders(sites []string) (*sql.DB, error) {
 			log.Fatalf("Failed to insert into targets: %v", err)
 		}
 		fmt.Println("Added data to targets from tmp_data")
-	}
 
-	SelectRecords()
+		// SelectRecords()
+	}
 
 	return db, nil
 }
