@@ -19,11 +19,11 @@ type VulnReport struct {
 
 func Recon(wordlist string, subdomainList string, url string, hasCMS bool, CMS string, CMSVersion string) (string, error) {
 	folders := CrawlSite(url)
-	fmt.Printf("URL: %s\nhasCMS: %t\nCMS: %s\nCMS Version: %s\n", url, hasCMS, CMS, CMSVersion)
+	fmt.Printf(Blue+"URL: %s\nhasCMS: %t\nCMS: %s\nCMS Version: %s\n"+Reset, url, hasCMS, CMS, CMSVersion)
 
 	// Find all the folders using a wordlist
-	fmt.Println("Brute Forcing")
-	errorPattern := regexp.MustCompile(`(?i)Error|Oops|404|Not\sFound|Page\sIsn't\sAvailable`)
+	fmt.Println(Blue + "[+] Brute Forcing" + Reset)
+	errorPattern := regexp.MustCompile(`(?i)Error|Oops|404|Not\sFound|Page\sIsn't\sAvailable|can\'t\sfind\sthe\spage\syou\swere\slooking\sfor`)
 	if wordlist == "" {
 		return "Usage: cdnreaper -db ['google | local'] -dw ['directory wordlist'] -sw ['subdomain wordlist']", nil
 	} else {
@@ -49,12 +49,12 @@ func Recon(wordlist string, subdomainList string, url string, hasCMS bool, CMS s
 				panic(err)
 			}
 
-			body := string(bodyBytes)
-			if errorPattern.MatchString(body) {
-				fmt.Printf("%s/%s\n"+Red, url, line)
+			body := bodyBytes
+			if errorPattern.Match(body) {
+				fmt.Printf(Red+"%s/%s -- %s\n"+Reset, url, line, errorPattern.Find(body))
 				continue
 			} else {
-				fmt.Printf("%s/%s\n"+Green, url, line)
+				fmt.Printf(Green+"%s/%s\n"+Reset, url, line)
 				folders = append(folders, fmt.Sprintf("%s/%s", url, line))
 			}
 		}
@@ -71,10 +71,11 @@ func Recon(wordlist string, subdomainList string, url string, hasCMS bool, CMS s
 		return "", err
 	}
 	InsertFolders(url, foldersJSON)
-	fmt.Printf("%s\n"+Reset, folders)
 
 	// Download CMS and plugins to scan for vulns
-
+	if hasCMS && CMS == "WordPress" {
+		WordPressVulnerabilityScanner(url)
+	}
 	return "", nil
 }
 
@@ -112,11 +113,4 @@ func ExtractLinks(doc *html.Node) []string {
 		links = append(links, ExtractLinks(c)...)
 	}
 	return links
-}
-
-// Vulnerability Scanners
-
-func WordPressVulnerabilityScanner(url string) ([]string, error) {
-
-	// return [nil], nil
 }

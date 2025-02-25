@@ -116,7 +116,6 @@ func InsertTarget(sites []string) (*sql.DB, error) {
 		if err != nil {
 			log.Fatalf("Failed to insert data into temporary table: %v", err)
 		}
-		fmt.Println("Added data to temporary table")
 		// Finally, perform the conditional insert into the targets table
 		insertIntoTargetsQuery := `
 			INSERT INTO targets (title, url, ip, alive, cms, has_cms, cms_version)
@@ -132,10 +131,7 @@ func InsertTarget(sites []string) (*sql.DB, error) {
 		if err != nil {
 			log.Fatalf("Failed to insert into targets: %v", err)
 		}
-		fmt.Println("Added data to targets from tmp_data")
 	}
-
-	SelectRecords()
 
 	return db, nil
 }
@@ -176,7 +172,6 @@ func InsertFolders(url string, sites []byte) (*sql.DB, error) {
 		if err != nil {
 			log.Fatalf("Failed to insert data into temporary table: %v", err)
 		}
-		fmt.Println("Added data to temporary table")
 		// Finally, perform the conditional insert into the targets table
 		insertIntoTargetsQuery := `
 			INSERT INTO folders (target_key, url, folder_name)
@@ -193,7 +188,6 @@ func InsertFolders(url string, sites []byte) (*sql.DB, error) {
 		if err != nil {
 			log.Fatalf("Failed to insert into targets: %v", err)
 		}
-		fmt.Println("Added data to targets from tmp_data")
 
 		// SelectRecords()
 	}

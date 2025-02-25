@@ -33,8 +33,18 @@ func GetSiteInfo(flag string, wordlist string, subdomainList string) string {
 		if err != nil {
 			return err.Error()
 		}
+		// var siteInfo SiteInfo
 		for _, site := range sites {
-			fmt.Println(site)
+			var siteInfo SiteInfo
+			if err := json.Unmarshal([]byte(site), &siteInfo); err != nil {
+				fmt.Println("Error decoding JSON:", err)
+				break
+			}
+			hasCMS, err := strconv.ParseBool(siteInfo.HasCMS)
+			if err != nil {
+				log.Panic(err)
+			}
+			Recon(wordlist, subdomainList, siteInfo.Url, hasCMS, siteInfo.CMS, siteInfo.CMSVersion)
 		}
 		return ""
 	case "local": // Get the data from a local database
