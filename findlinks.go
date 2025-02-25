@@ -69,14 +69,10 @@ func readNumberFromFile(filePath string) (int, error) {
 func findLinks() ([]string, error) {
 	apiKey := os.Getenv("GOOGLE_API_KEY") // Google API key set as environment variable for security
 	cx := os.Getenv("CSE")                // Custom search engine key set as environment variable for security
-	fileInfo, err := os.Stat("query_count.txt")
-	if err != nil {
-		fmt.Println(err)
-	}
+	start := 0
 	var sites []string
 	// The search query
 	query := "Companies in bloemfontein location:bloemfontein -list -directory -top -best -companies -site:*.gov.* -site:maps.google.com -site:facebook.* -site:tiktok.* -site:twitter.* -site:pinterest.*"
-	firstRequest := true
 
 	// Create the request URL
 	searchURL := fmt.Sprintf("https://www.googleapis.com/customsearch/v1?key=%s&cx=%s&q=%s", apiKey, cx, url.QueryEscape(query))
@@ -90,7 +86,7 @@ func findLinks() ([]string, error) {
 
 	var result SearchResult // Decode the JSON response
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Panic("Error decoding JSON:", err)
+		log.Panic(Red+"Error decoding JSON:"+Reset, err)
 		return nil, err
 	}
 	// Print the search results
@@ -101,29 +97,24 @@ func findLinks() ([]string, error) {
 		log.Panic(err)
 		return nil, err
 	}
-	for start := range calculatePages {
+
+	content, err := readNumberFromFile("query_count.txt")
+	if err != nil {
+		fmt.Println(err)
+	}
+	start = content
+	for start < 100 {
 		/*
 			We can only get 10 results per page, so we need to figure out how many results there are so we can work out how many pages there are.
 			This makes sure that we start at on and then at the last result on the page + 1
 
 		*/
-		if !firstRequest {
-			fmt.Println(start*10 + 1)
-			start = start*10 + 1
-			fmt.Println(start)
-		}
-		if start%100 == 0 && start >= 100 {
-			fmt.Println("We went over the quota")
-			break
-		}
-		if fileInfo.Size() > 0 && firstRequest {
 
-			content, err := readNumberFromFile("query_count.txt")
-			if err != nil {
-				fmt.Println(err)
-			}
-			start = content
-			firstRequest = false
+		fmt.Println(start)
+
+		if start%100 == 0 && start >= 100 {
+			fmt.Println(Red + "[-] We went over the quota" + Reset)
+			break
 		}
 
 		writeNumberToFile("query_count.txt", start)
@@ -137,7 +128,7 @@ func findLinks() ([]string, error) {
 		}
 		defer resp.Body.Close()
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			fmt.Println("Error decoding JSON:", err)
+			fmt.Println(Red+"[-] Error decoding JSON:"+Reset, err)
 			break
 		}
 		if resp.Body != nil {
@@ -148,7 +139,7 @@ func findLinks() ([]string, error) {
 		}
 		fmt.Println(sites)
 		InsertTarget(sites)
-
+		start = start + 10
 	}
 	return sites, nil
 }
@@ -163,6 +154,7 @@ func getExtraInfo(url string) string {
 
 	domainPattern := regexp.MustCompile(`https?://([^/]+)`)
 	cdnPattern := regexp.MustCompile(`<meta\s+name="generator"\scontent="([^"]\w+)\s(\S+)".*`)
+	wpNoVersion := regexp.MustCompile(`wp-content`)
 
 	domain := domainPattern.FindStringSubmatch(url)[1]
 	ip, err := net.LookupIP(domain)
@@ -201,6 +193,7 @@ func getExtraInfo(url string) string {
 
 	// Check for CMS patterns in the HTML content
 	match := cdnPattern.FindStringSubmatch(string(body))
+	wpNoVersionMatch := wpNoVersion.FindStringSubmatch(string(body))
 
 	if len(match) < 2 {
 		siteInfo.HasCMS = "false"
@@ -208,7 +201,13 @@ func getExtraInfo(url string) string {
 		siteInfo.HasCMS = "true"
 		siteInfo.CMSVersion = match[2]
 		siteInfo.CMS = match[1]
-		fmt.Printf("The CMS is: %s and the version is: %s\n", siteInfo.CMS, siteInfo.CMSVersion)
+		fmt.Printf(Blue+"[+] The CMS is: %s and the version is: %s\n"+Reset, siteInfo.CMS, siteInfo.CMSVersion)
+	}
+	if len(wpNoVersionMatch) > 0 && len(match) < 2 {
+		siteInfo.HasCMS = "true"
+		siteInfo.CMSVersion = "No Version"
+		siteInfo.CMS = "WordPress"
+		fmt.Printf(Blue+"[+] The CMS is: %s and the version is: %s\n"+Reset, siteInfo.CMS, siteInfo.CMSVersion)
 	}
 
 	siteInfo.Url = url
